@@ -1,0 +1,28 @@
+on:
+  push:
+    branches:
+      - main
+  pull-request:
+    branches:
+      - main
+
+
+jobs:
+  build_on_linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cpp_comp: g++
+            c_comp: gcc
+          - cpp_comp: clang++
+            c_comp: clang
+            coverage: false
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: checking out repositry and submodules
+        uses: actions/checkuot@v5
