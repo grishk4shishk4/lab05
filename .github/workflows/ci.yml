@@ -152,11 +152,15 @@ jobs:
           gcov --version
 
       - name: Run tests
-        # run: cmake --build _buildgcc/ --target test -- ARGS=--verbose
         run: |
           cd _buildgcc
+          echo "=== Looking for .gcno files (should exist) ==="
+          find . -name "*.gcno" | head -20 || echo "No .gcno found"
+          chmod -R +w .            # даём право на создание .gcda
           chmod +x tests
           ./tests
+          echo "=== Looking for .gcda files after tests ==="
+          find . -name "*.gcda" | head -20 || echo "No .gcda found – coverage will fail"
           
       - name: create coverage
         run: |
