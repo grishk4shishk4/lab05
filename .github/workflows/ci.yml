@@ -166,7 +166,7 @@ jobs:
           lcov --ignore-errors mismatch --ignore-errors gcov,gcov  --capture --directory . -o coverage.info || lcov --ignore-errors gcov --capture --directory . -o coverage.info 
           lcov --extract coverage.info  "*/banking/*"  -o result_coverage.info
       - name: Upload to Coveralls
-        uses: coverallsapp/github-action@v5
+        uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path-to-lcov: result_coverage.info
