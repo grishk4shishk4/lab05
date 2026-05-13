@@ -5,10 +5,75 @@ on:
   pull_request:
     branches:
       - main
-
-
+      
 jobs:
   build_on_linux:
+    name: Build on Linux
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cpp_comp: g++
+            c_comp: gcc
+            coverage: true
+          - cpp_comp: clang++
+            c_comp: clang
+            coverage: false
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: checking out repository and submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: preparing build
+        run: |
+          sudo apt-get update
+          cmake -H. -B_build${{matrix.c_comp}} -D CMAKE_CXX_COMPILER=${{matrix.cpp_comp}} \
+            -D CMAKE_C_COMPILER=${{matrix.c_comp}} -DBUILD_TESTS=ON -DTESTS_NAME=tests -DENABLE_COVERAGE=${{matrix.coverage}}
+      - name: building
+        run: |
+          cmake --build _build${{matrix.c_comp}}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: _build${{matrix.c_comp}}
+          path: _build${{matrix.c_comp}}/
+          retention-days: 1
+
+  build_on_windows:
+    name: Build on windows
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+
+    steps:
+      - name: checking out repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: preparing build
+        run:  cmake . -B_build -DBUILD_TESTS=ON -DTESTS_NAME=tests -DENABLE_COVERAGE=false -Dgtest_force_shared_crt=ON
+      - name: building
+        run:  cmake --build _build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows_build
+          path: _build/    
+          retention-days: 1
+
+  test-linux:
+    name: Run Google Tests on linux
+    needs: build_on_linux
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -18,11 +83,90 @@ jobs:
             c_comp: gcc
           - cpp_comp: clang++
             c_comp: clang
-            coverage: false
+    steps:
+      - name: checking out repository and submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
 
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - name: Download artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: _build${{matrix.c_comp}}
+          path: _build${{matrix.c_comp}}/
+
+      - name: Run tests
+        # run: cmake --build _build${{matrix.c_comp}}/ --target test -- ARGS=--verbose
+        run: |
+          cd _build${{matrix.c_comp}}
+          chmod +x tests
+          ./tests
+
+  test_on_windows:
+    name: Run Google Tests on Windows
+    needs: build_on_windows
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
 
     steps:
-      - name: checking out repositry and submodules
-        uses: actions/checkuot@v5
+      - name: checking out repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows_build
+          path: _build/    
+      - name: Running tests
+        run: |
+          tree
+          _build/Debug/tests.exe
+        
+  Create_Coverage:
+    name: Create_Coverage
+    needs: [test-linux, test_on_windows]
+    if : github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true  
+    steps:
+      - name: checking out repository and submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+        
+      - name: Download artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: _buildgcc
+          path: _buildgcc/
+
+      - name: Check and install dependencies
+        run: |
+          sudo apt-get update    
+          gcov --version
+          sudo apt-get install lcov   
+          g++ --version
+          lcov --version
+          gcov --version
+
+      - name: Run tests
+        # run: cmake --build _buildgcc/ --target test -- ARGS=--verbose
+        run: |
+          cd _buildgcc
+          chmod +x tests
+          ./tests
+          
+      - name: create coverage
+        run: |
+          lcov --ignore-errors mismatch --ignore-errors gcov,gcov  --capture --directory . -o coverage.info || lcov --ignore-errors gcov --capture --directory . -o coverage.info 
+          lcov --extract coverage.info  "*/banking/*"  -o result_coverage.info
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: result_coverage.info
