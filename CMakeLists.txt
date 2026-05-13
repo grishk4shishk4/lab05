@@ -10,8 +10,6 @@ if(ENABLE_COVERAGE)
   set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} " -g -coverage")
 endif()
 
-endif()
-
 add_subdirectory(banking)
 
 option(BUILD_TESTS "Build tests" ON)
